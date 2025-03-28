@@ -1,10 +1,14 @@
 // system_manager.cpp
 #include "system_manager.hpp"
+#include "cli_commands.hpp"
 #include "stm32f4xx_hal.h"
 
 extern UART_HandleTypeDef huart2;
 extern FDCAN_HandleTypeDef hfdcan1;
 extern FDCAN_HandleTypeDef hfdcan2;
+
+std::unique_ptr<FDCANTask> fdcan1Task;
+std::unique_ptr<FDCANTask> fdcan2Task;
 
 extern "C" void SystemClock_Config(void);
 extern "C" void MX_GPIO_Init(void);
@@ -26,21 +30,10 @@ void SystemManager::init() {
     fdcan2Task = std::make_unique<FDCANTask>("FDCAN2", 512, osPriorityNormal, &hfdcan2);
 
     cli->setLogger(logger.get());
-
-    registerCLICommands();
+    registerDefaultCLICommands(cli->getRegistry());
 }
 
 void SystemManager::run() {
     vTaskStartScheduler();
     while (1) {}
-}
-
-void SystemManager::registerCLICommands() {
-    cli->registerCommand("help", HelpCommand::executor);
-    cli->registerCommand("echo", EchoCommand::executor);
-    cli->registerCommand("add", AddCommand::executor);
-    cli->registerCommand("setled", SetLedCommand::executor);
-    cli->registerCommand("tab", TabCommand::executor);
-    cli->registerCommand("cansend", CanSendCommand::executor);
-    cli->registerCommand("canstat", CanStatCommand::executor);
 }
