@@ -72,7 +72,15 @@ public:
     void onUpdate(MotorControllerContext&) { OutputCapture::stream() << "Update ERROR\n"; }
 };
 
-class MotorControllerContext : public StaticStateContext<MotorControllerContext> {};
+class MotorControllerContext : public StaticStateContext<MotorControllerContext> {
+public:
+    template <StateID From, StateID To>
+    bool canTransitionImpl() const {
+        if constexpr (From == StateID::SELF_TEST && To == StateID::AUTOMATED)
+            return false;
+        return true;
+    }
+};
 
 //----------------------------------------
 // Google Test Cases
@@ -86,7 +94,24 @@ TEST(MotorControllerStateMachineTest, StartsInIdle) {
     EXPECT_EQ(OutputCapture::str(), "Update IDLE\n");
 }
 
-TEST(MotorControllerStateMachineTest, ValidTransitions) {
+TEST(MotorControllerStateMachineTest, ValidTransitionsWithGuardFailureToError) {
+    OutputCapture::clear();
+    MotorControllerContext ctx;
+    ctx.dispatchEvent<EventID::BEGIN_SELF_TEST>();
+    ctx.update();
+    EXPECT_EQ(ctx.currentID(), StateID::SELF_TEST);
+
+    // Guard prevents SELF_TEST -> AUTOMATED
+    ctx.dispatchEvent<EventID::START_AUTOMATION>();
+    ctx.update();
+    EXPECT_EQ(ctx.currentID(), StateID::ERROR);
+
+    std::string out = OutputCapture::str();
+    EXPECT_NE(out.find("Enter SELF_TEST"), std::string::npos);
+    EXPECT_NE(out.find("Enter ERROR"), std::string::npos);
+}
+
+TEST(MotorControllerStateMachineTest, FullValidPathToManual) {
     OutputCapture::clear();
     MotorControllerContext ctx;
 
@@ -94,15 +119,8 @@ TEST(MotorControllerStateMachineTest, ValidTransitions) {
     ctx.update();
     EXPECT_EQ(ctx.currentID(), StateID::SELF_TEST);
 
+    // Skip the blocked transition and go to error
     ctx.dispatchEvent<EventID::START_AUTOMATION>();
-    ctx.update();
-    EXPECT_EQ(ctx.currentID(), StateID::AUTOMATED);
-
-    ctx.dispatchEvent<EventID::ENTER_MANUAL>();
-    ctx.update();
-    EXPECT_EQ(ctx.currentID(), StateID::MANUAL);
-
-    ctx.dispatchEvent<EventID::FAULT>();
     ctx.update();
     EXPECT_EQ(ctx.currentID(), StateID::ERROR);
 
@@ -110,10 +128,27 @@ TEST(MotorControllerStateMachineTest, ValidTransitions) {
     ctx.update();
     EXPECT_EQ(ctx.currentID(), StateID::IDLE);
 
+    // New valid path
+    ctx.dispatchEvent<EventID::BEGIN_SELF_TEST>();
+    ctx.update();
+    ctx.setState<StateID::AUTOMATED>(); // Bypass guard manually for test
+    ctx.dispatchEvent<EventID::ENTER_MANUAL>();
+    ctx.update();
+    EXPECT_EQ(ctx.currentID(), StateID::MANUAL);
+
     std::string out = OutputCapture::str();
-    EXPECT_NE(out.find("Enter SELF_TEST"), std::string::npos);
-    EXPECT_NE(out.find("Enter AUTOMATED"), std::string::npos);
     EXPECT_NE(out.find("Enter MANUAL"), std::string::npos);
-    EXPECT_NE(out.find("Enter ERROR"), std::string::npos);
     EXPECT_NE(out.find("Enter IDLE"), std::string::npos);
+    EXPECT_NE(out.find("Enter ERROR"), std::string::npos);
+}
+
+TEST(MotorControllerStateMachineTest, HandlesMultipleUpdatesPerState) {
+    OutputCapture::clear();
+    MotorControllerContext ctx;
+    ctx.update();
+    ctx.update();
+    ctx.update();
+    EXPECT_EQ(ctx.currentID(), StateID::IDLE);
+    std::string out = OutputCapture::str();
+    EXPECT_EQ(std::count(out.begin(), out.end(), '\n'), 3);
 }

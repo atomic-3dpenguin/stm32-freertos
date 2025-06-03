@@ -54,27 +54,22 @@ struct Transition;
 
 // Valid Transitions
 
-// IDLE --BEGIN_SELF_TEST--> SELF_TEST
 template <> struct Transition<StateID::IDLE, EventID::BEGIN_SELF_TEST> {
     static constexpr StateID To = StateID::SELF_TEST;
 };
 
-// SELF_TEST --START_AUTOMATION--> AUTOMATED
 template <> struct Transition<StateID::SELF_TEST, EventID::START_AUTOMATION> {
     static constexpr StateID To = StateID::AUTOMATED;
 };
 
-// AUTOMATED --ENTER_MANUAL--> MANUAL
 template <> struct Transition<StateID::AUTOMATED, EventID::ENTER_MANUAL> {
     static constexpr StateID To = StateID::MANUAL;
 };
 
-// MANUAL --FAULT--> ERROR
 template <> struct Transition<StateID::MANUAL, EventID::FAULT> {
     static constexpr StateID To = StateID::ERROR;
 };
 
-// ERROR --RESET--> IDLE
 template <> struct Transition<StateID::ERROR, EventID::RESET> {
     static constexpr StateID To = StateID::IDLE;
 };
@@ -89,7 +84,7 @@ template <typename T>
 struct is_valid_transition<T, std::void_t<decltype(T::To)>> : std::true_type {};
 
 //----------------------------------------
-// CRTP Context with Static Storage
+// CRTP Context with Static Storage and Guards
 //----------------------------------------
 template <typename Derived>
 class StaticStateContext {
@@ -136,8 +131,19 @@ public:
     template <StateID From, EventID Ev>
     void dispatchFrom() {
         static_assert(is_valid_transition<Transition<From, Ev>>::value, "Invalid transition");
-        constexpr StateID Next = Transition<From, Ev>::To;
-        setState<Next>();
+        constexpr StateID To = Transition<From, Ev>::To;
+
+        if (canTransition<From, To>()) {
+            setState<To>();
+        } else {
+            setState<StateID::ERROR>();
+        }
+    }
+
+    // Entry/exit guards can be overridden in the context class
+    template <StateID From, StateID To>
+    bool canTransition() const {
+        return static_cast<const ThisType*>(this)->template canTransitionImpl<From, To>();
     }
 
 private:
