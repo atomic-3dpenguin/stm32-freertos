@@ -8,10 +8,13 @@
 #ifndef MYTHREAD_HPP_
 #define MYTHREAD_HPP_
 
+#include "main.h"
+
 #include "CrtpThread.hpp"
 #include "cmsis_os2.h"
 #include <cstdio>
 
+namespace common{
 class MyThread : public CrtpThread<MyThread> {
 public:
   // Automatically starts with high priority, 1 KiB stack, named "MyThr"
@@ -24,6 +27,7 @@ public:
     constexpr uint32_t FLAG_WORK = (1u << 0);
 
     for (;;) {
+        HAL_GPIO_TogglePin(LD1_GPIO_Port,LD1_Pin);
       // Wait for FLAG_WORK from either thread or ISR
       uint32_t ev = waitEvent(FLAG_WORK);
 
@@ -44,6 +48,8 @@ public:
     sendEvent(1u << 0);
   }
 };
+}
+
 
 
 

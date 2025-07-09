@@ -1,15 +1,12 @@
-/*
- * CrtpThread.hpp
- *
- *  Created on: May 18, 2025
- *      Author: cavem
- */
-
 #ifndef CRTPTHREAD_HPP_
 #define CRTPTHREAD_HPP_
 
-
+#include "FreeRTOS.h"
+#include "task.h"
 #include "cmsis_os2.h"
+#include <cstdio>
+
+namespace common{
 
 template<typename Derived>
 class CrtpThread {
@@ -43,6 +40,18 @@ public:
     return osEventFlagsWait(evt_id_, flags, osFlagsWaitAny, timeout);
   }
 
+  /// Dump information for all tasks to the console
+  static void Dump() {
+    // Header for FreeRTOS vTaskList output
+    printf("Name\t         State   Prio    Stack   Num\r\n");
+#if (configUSE_TRACE_FACILITY == 1) && (configUSE_STATS_FORMATTING_FUNCTIONS == 1)
+    char buffer[512];
+    vTaskList(buffer);
+    printf("%s\r\n", buffer);
+#else
+    printf("Error: configUSE_TRACE_FACILITY and configUSE_STATS_FORMATTING_FUNCTIONS must be enabled in FreeRTOSConfig.h\r\n");
+#endif
+  }
 protected:
 
   /// Cast back to the derived class and call its run()
@@ -54,4 +63,5 @@ protected:
   osEventFlagsId_t evt_id_;
 };
 
+} // common
 #endif /* CRTPTHREAD_HPP_ */
